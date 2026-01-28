@@ -1,0 +1,9 @@
+general:
+  kafka-topic: trader-updates
+
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: midas-core
+      auto-offset-reset: earliest
