@@ -2,6 +2,7 @@ package com.jpmc.midascore.service;
 
 import com.jpmc.midascore.entity.TransactionRecord;
 import com.jpmc.midascore.entity.UserRecord;
+import com.jpmc.midascore.foundation.Incentive;
 import com.jpmc.midascore.foundation.Transaction;
 import com.jpmc.midascore.repository.TransactionRepository;
 import com.jpmc.midascore.repository.UserRepository;
@@ -16,10 +17,14 @@ public class TransactionService {
 
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
+    private final IncentiveService incentiveService;
 
-    public TransactionService(UserRepository userRepository, TransactionRepository transactionRepository) {
+    public TransactionService(UserRepository userRepository,
+            TransactionRepository transactionRepository,
+            IncentiveService incentiveService) {
         this.userRepository = userRepository;
         this.transactionRepository = transactionRepository;
+        this.incentiveService = incentiveService;
     }
 
     @Transactional
@@ -47,20 +52,27 @@ public class TransactionService {
             return false;
         }
 
+        // Get incentive from the incentive API
+        Incentive incentive = incentiveService.getIncentive(transaction);
+        float incentiveAmount = incentive != null ? incentive.getAmount() : 0;
+
         // Process the transaction: update balances
+        // Sender loses the transaction amount
         sender.setBalance(sender.getBalance() - transaction.getAmount());
-        recipient.setBalance(recipient.getBalance() + transaction.getAmount());
+        // Recipient gains the transaction amount PLUS the incentive
+        recipient.setBalance(recipient.getBalance() + transaction.getAmount() + incentiveAmount);
 
         // Save updated users
         userRepository.save(sender);
         userRepository.save(recipient);
 
-        // Record the transaction
-        TransactionRecord transactionRecord = new TransactionRecord(sender, recipient, transaction.getAmount());
+        // Record the transaction with incentive
+        TransactionRecord transactionRecord = new TransactionRecord(sender, recipient, transaction.getAmount(),
+                incentiveAmount);
         transactionRepository.save(transactionRecord);
 
-        logger.info("Transaction processed: {} -> {}, amount: {}",
-                sender.getName(), recipient.getName(), transaction.getAmount());
+        logger.info("Transaction processed: {} -> {}, amount: {}, incentive: {}",
+                sender.getName(), recipient.getName(), transaction.getAmount(), incentiveAmount);
 
         return true;
     }
